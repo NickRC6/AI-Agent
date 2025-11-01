@@ -15,7 +15,6 @@ def main():
         verbose = True
         sys.argv.remove("--verbose")
 
-    # Get argument either from sys.argv or stdin
     if len(sys.argv) > 1:
         arg = sys.argv[1]
     else:
