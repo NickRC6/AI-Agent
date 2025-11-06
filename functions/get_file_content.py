@@ -1,21 +1,34 @@
 def get_file_content(working_directory, file_path):
     import os
+    from config import MAX_FILE_LENGTH
 
     try:
         working_directory = os.path.abspath(working_directory)
-        full_path = os.path.abspath(os.path.join(working_directory, directory))
+        full_path = os.path.abspath(os.path.join(working_directory, file_path))
 
         if os.path.commonpath([working_directory, full_path]) != working_directory:
-            msg = f'Error: Cannot list "{directory}" as it is outside the permitted working directory'
+            msg = f'Error: Cannot read "{file_path}" as it is outside the permitted working directory'
             print(msg)
             return msg
 
-        if not os.path.isdir(full_path):
-            msg = f'Error: "{directory}" is not a directory'
+        if not os.path.isfile(full_path):
+            msg = f'Error: File not found or is not a regular file: "{file_path}"'
             print(msg)
             return msg
-        
+
+        with open(full_path, "r", encoding="utf-8") as f:
+            contents = f.read()
+
+        if len(contents) > MAX_FILE_LENGTH:
+            contents = (
+                contents[:MAX_FILE_LENGTH]
+                + f'\n[...File "{file_path}" truncated at {MAX_FILE_LENGTH} characters]'
+            )
+
+        print(contents)
+        return contents
+
     except Exception as e:
-        msg = f"Error: {e}"
+        msg = f'Error: {e}'
         print(msg)
         return msg
