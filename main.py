@@ -4,6 +4,9 @@ from config import system_prompt
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from functions.get_file_content import get_file_content
+from functions.get_files_info import schema_get_files_info
+from functions.get_files_info import available_functions
 
 load_dotenv()
 api_key = os.environ.get('GEMINI_API_KEY')
@@ -32,7 +35,9 @@ def main():
     response = client.models.generate_content(
     model="gemini-2.0-flash-001",
     contents=messages,
-    config=types.GenerateContentConfig(system_instruction=system_prompt),
+    config=types.GenerateContentConfig(
+    tools=[available_functions], system_instruction=system_prompt
+)
 )
     prompt_tokens = None
     response_tokens = None
@@ -42,6 +47,12 @@ def main():
         prompt_tokens = getattr(tokens, "input_token_count", None)
         response_tokens = getattr(tokens, "output_token_count", None)
 
+    if response.function_calls:
+        for part in response.function_calls:
+            print(f"Calling function: {part.name}({part.args})")
+    else:
+        print(response.text)
+
     if verbose:
         print(f"User prompt: {arg}")
         if prompt_tokens is not None and response_tokens is not None:
@@ -49,9 +60,6 @@ def main():
             print(f"Response tokens: {response_tokens}")
         else:
             print("Token usage data not available for this response.")
-        print(response.text)
-    else:
-        print(response.text)
 
 if __name__ == "__main__":
     main()
