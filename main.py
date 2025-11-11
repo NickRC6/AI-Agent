@@ -4,8 +4,20 @@ from config import system_prompt
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from functions.get_file_content import get_file_content
-from functions.get_files_info import schema_get_files_info, available_functions
+from functions.get_files_info import schema_get_files_info, get_files_info
+from functions.get_file_content import schema_get_file_content, get_file_content
+from functions.write_file import schema_write_file, write_file
+from functions.run_python_file import schema_run_python_file, run_python_file
+from functions.call_function import call_function
+
+available_functions = types.Tool(
+    function_declarations=[
+        schema_get_files_info,
+        schema_get_file_content,
+        schema_write_file,
+        schema_run_python_file,
+    ]
+)
 
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
@@ -36,9 +48,16 @@ def main():
 
     if response.function_calls:
         for part in response.function_calls:
-            print(f"Calling function: {part.name}({part.args})")
+            function_call_result = call_function(part, verbose=verbose)
+            if not hasattr(function_call_result.parts[0], "function_response"):
+                raise RuntimeError("Fatal: function call result missing function_response")
     else:
-        print(response.text)
+        if arg.startswith("run ") and arg.endswith(".py"):
+            inferred_call = {"file_path": arg[4:].strip(), "args": []}
+            print(f"Calling function: run_python_file({inferred_call})")
+            run_python_file(os.getcwd(), **inferred_call)
+        elif response.text:
+            print(response.text)
 
     if verbose:
         print(f"User prompt: {arg}")
