@@ -1,5 +1,6 @@
 import os
 import sys
+import sys
 from config import system_prompt
 from dotenv import load_dotenv
 from google import genai
@@ -30,45 +31,62 @@ def main():
         sys.argv.remove("--verbose")
 
     arg = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()
-
     if not arg:
         print("Error: No argument provided.")
         sys.exit(1)
 
     messages = [types.Content(role="user", parts=[types.Part(text=arg)])]
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=messages,
-        config=types.GenerateContentConfig(
-            tools=[available_functions],
-            system_instruction=system_prompt,
-        ),
-    )
-
-    if response.function_calls:
-        for part in response.function_calls:
-            function_call_result = call_function(part, verbose=verbose)
-            if not hasattr(function_call_result.parts[0], "function_response"):
-                raise RuntimeError("Fatal: function call result missing function_response")
-    else:
-        if arg.startswith("run ") and arg.endswith(".py"):
-            inferred_call = {"file_path": arg[4:].strip(), "args": []}
-            print(f"Calling function: run_python_file({inferred_call})")
-            run_python_file(os.getcwd(), **inferred_call)
-        elif response.text:
-            print(response.text)
-
-    if verbose:
-        print(f"User prompt: {arg}")
-        if hasattr(response, "metadata") and hasattr(response.metadata, "token_metadata"):
-            tokens = response.metadata.token_metadata
-            print(
-                f"Prompt tokens: {getattr(tokens, 'input_token_count', None)}\n"
-                f"Response tokens: {getattr(tokens, 'output_token_count', None)}"
+    for i in range(20):  
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    tools=[available_functions],
+                    system_instruction=system_prompt,
+                    temperature=0, 
+                ),
             )
-        else:
-            print("Token usage data not available for this response.")
+
+            did_call_function = False
+
+            for candidate in response.candidates:
+                messages.append(candidate.content)
+                for part in candidate.content.parts:
+                    if hasattr(part, "function_call") and part.function_call:
+                        did_call_function = True
+                        fn = part.function_call
+                        fn_name = fn.name
+                        print(f" - Calling function: {fn_name}")
+                        sys.stdout.flush()
+
+                        result = call_function(fn, verbose=verbose)
+                        
+                        messages.append(
+                            types.Content(
+                                role="user",
+                                parts=[types.Part(function_response=result.parts[0].function_response)],
+                            )
+                        )
+
+            if did_call_function:
+                continue
+
+            if response.text:
+                print("Final response:\n")
+                print(response.text)
+                sys.stdout.flush()
+                break
+
+        except Exception as e:
+            print(f"Error during iteration {i+1}: {e}")
+            sys.stdout.flush()
+            break
+
+    else:
+        print("Reached max iterations (20) without final response.")
+        sys.stdout.flush()
 
 
 if __name__ == "__main__":
